@@ -58,7 +58,7 @@ class AStarEpsilon(AStar):
          order (small to big). Popping / peeking `open` returns the node with
          the smallest `f`.
         For each node (candidate) in the created focal, calculate its priority
-         by callingthe function `self.within_focal_priority_function` on it.
+         by calling the function `self.within_focal_priority_function` on it.
          This function expects to get 3 values: the node, the problem and the
          solver (self). You can create an array of these priority value. Then,
          use `np.argmin()` to find the index of the item (within this array)
@@ -72,4 +72,29 @@ class AStarEpsilon(AStar):
          for the extracted (and returned) node.
         """
 
-        raise NotImplementedError  # TODO: remove!
+        # Check if already open
+        if self.open.is_empty():
+            return None
+
+        eps = self.focal_epsilon
+        maximum_expanding_priority = self.open.peek_next_node().expanding_priority * (1 + eps)
+        focal = [self.open.pop_next_node()]
+        while not self.open.is_empty() and (self.max_focal_size is None or len(focal) <= self.max_focal_size):
+            if maximum_expanding_priority < self.open.peek_next_node().expanding_priority:
+                break
+            focal.append(self.open.pop_next_node())
+
+        focal_priority = []
+        for current_node in focal:
+            focal_priority.append(self.within_focal_priority_function(current_node, problem, self))
+        min_indices = np.argmin(focal_priority)
+        min_node = focal.pop(min_indices.item(0))
+
+        while len(focal) > 0:
+            self.open.push_node(focal.pop())
+
+        # TODO: Verify that we need this part
+        if self.use_close:
+            self.close.add_node(min_node)
+
+        return min_node

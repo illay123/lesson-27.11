@@ -84,7 +84,19 @@ class AnytimeAStar(GraphProblemSolver):
                 #   obtain the g-cost of a solution). Update iff the current inspected solution cost < the cost of
                 #   the best found solution so far.
                 #  Make sure to also read the big comment in the head of this class.
-                raise NotImplementedError   # TODO: remove this line!
+                current_aster = AStar(heuristic_function_type=self.heuristic_function_type,
+                                      heuristic_weight=((low_heuristic_weight + high_heuristic_weight) / 2),
+                                      max_nr_states_to_expand=self.max_nr_states_to_expand_per_iteration)
+                result = current_aster.solve_problem(problem=problem)
+                total_nr_expanded_states += result.nr_expanded_states
+                max_nr_stored_states = max(max_nr_stored_states, result.max_nr_stored_states)
+                if not result.is_solution_found:
+                    low_heuristic_weight = (low_heuristic_weight + high_heuristic_weight) / 2
+                    continue
+                high_heuristic_weight = (low_heuristic_weight + high_heuristic_weight) / 2
+                if best_solution.solution_g_cost > result.solution_g_cost:
+                    best_heuristic_weight = high_heuristic_weight
+                    best_solution = result
 
         self.solver_name = f'{self.__class__.solver_name} (h={best_solution.solver.heuristic_function.heuristic_name}, w={best_heuristic_weight:.3f})'
         return best_solution._replace(

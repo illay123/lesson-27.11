@@ -49,7 +49,10 @@ class MDAMaxAirDistHeuristic(HeuristicFunction):
         if len(all_certain_junctions_in_remaining_ambulance_path) < 2:
             return 0
 
-        return 10  # TODO: modify this line.
+        return max(self.cached_air_distance_calculator.get_air_distance_between_junctions(junction1=junction1, junction2=junction2)
+             for junction1 in all_certain_junctions_in_remaining_ambulance_path
+             for junction2 in all_certain_junctions_in_remaining_ambulance_path
+             if junction1 != junction2)
 
 
 class MDASumAirDistHeuristic(HeuristicFunction):
@@ -92,7 +95,30 @@ class MDASumAirDistHeuristic(HeuristicFunction):
         if len(all_certain_junctions_in_remaining_ambulance_path) < 2:
             return 0
 
-        raise NotImplementedError  # TODO: remove this line and complete the missing part here!
+        junctions_to_visit = set(all_certain_junctions_in_remaining_ambulance_path) - {state.current_location} # TODO: check if needed
+        current_junction_location = state.current_location
+        distance_result = 0
+        while len(junctions_to_visit) > 1:
+            current_closest_junction = None
+            index = 0
+            min_distance = 0
+            for current_junction in junctions_to_visit:
+                current_distance = self.cached_air_distance_calculator.get_air_distance_between_junctions(junction1=current_junction_location, junction2=current_junction)
+                if index == 0:
+                    min_distance = current_distance
+                    current_closest_junction = current_junction
+                elif current_distance < min_distance:
+                    min_distance = current_distance
+                    current_closest_junction = current_junction
+                index += 1
+            current_junction_location = current_closest_junction
+            distance_result += min_distance
+            junctions_to_visit = junctions_to_visit - {current_closest_junction}
+
+        if len(junctions_to_visit) == 1:
+            distance_result += self.cached_air_distance_calculator.get_air_distance_between_junctions(junction1=current_junction_location, junction2=list(junctions_to_visit)[0])
+
+        return distance_result
 
 
 class MDAMSTAirDistHeuristic(HeuristicFunction):
@@ -130,7 +156,14 @@ class MDAMSTAirDistHeuristic(HeuristicFunction):
               Use `nx.minimum_spanning_tree()` to get an MST. Calculate the MST size using the method
               `.size(weight='weight')`. Do not manually sum the edges' weights.
         """
-        raise NotImplementedError  # TODO: remove this line!
+        graph = nx.Graph()
+        graph.add_nodes_from(nodes_for_adding=junctions)
+        for first_junction in junctions:
+            for second_junction in junctions:
+                if first_junction == second_junction:
+                    continue
+                graph.add_edge(u_of_edge=first_junction,v_of_edge=second_junction,weight=self.cached_air_distance_calculator.get_air_distance_between_junctions(junction1=first_junction,junction2=second_junction))
+        return nx.minimum_spanning_tree(G=graph).size(weight='weight')
 
 
 class MDATestsTravelDistToNearestLabHeuristic(HeuristicFunction):
@@ -160,10 +193,19 @@ class MDATestsTravelDistToNearestLabHeuristic(HeuristicFunction):
         assert isinstance(self.problem, MDAProblem)
         assert isinstance(state, MDAState)
 
+        problem = self.problem
+
         def air_dist_to_closest_lab(junction: Junction) -> float:
             """
             Returns the distance between `junction` and the laboratory that is closest to `junction`.
             """
-            return min(...)  # TODO: replace `...` with the relevant implementation.
+            return min(junction.calc_air_distance_from(current_laboratory.location) for current_laboratory in problem.problem_input.laboratories)
 
-        raise NotImplementedError  # TODO: remove this line!
+        result_cost = 0
+        tests_on_ambulance = state.get_total_nr_tests_taken_and_stored_on_ambulance()
+        if tests_on_ambulance > 0:
+            result_cost += tests_on_ambulance * air_dist_to_closest_lab(state.current_location)
+        for current_apartment in problem.get_reported_apartments_waiting_to_visit(state):
+            result_cost += current_apartment.nr_roommates * air_dist_to_closest_lab(current_apartment.location)
+        return result_cost
+
